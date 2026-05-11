@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DUC HUY PANEL</title>
+
+<style>
+body{
+margin:0;
+background:black;
+color:#00ff9d;
+font-family:monospace;
+}
+
+.box{
+width:380px;
+height:95vh;
+overflow-y:auto;
+margin:10px auto;
+border:1px solid #00ff9d;
+border-radius:15px;
+padding:15px;
+background:#000;
+}
+
+.box::-webkit-scrollbar{width:4px;}
+.box::-webkit-scrollbar-thumb{background:#00ff9d;border-radius:10px;}
+
+h1{
+text-align:center;
+font-size:28px;
+letter-spacing:3px;
+}
+
+input,button{
+width:100%;
+padding:10px;
+margin-top:8px;
+border-radius:10px;
+border:1px solid #00ff9d;
+background:black;
+color:#00ff9d;
+}
+
+button:hover{
+background:#00ff9d;
+color:black;
+}
+
+.section{
+border:1px solid #00ff9d;
+border-radius:12px;
+padding:10px;
+margin-top:10px;
+}
+
+/* TOGGLE */
+.switch{
+position:relative;
+display:inline-block;
+width:50px;
+height:25px;
+}
+.switch input{display:none;}
+.slider{
+position:absolute;
+inset:0;
+border:1px solid #00ff9d;
+border-radius:25px;
+background:#111;
+}
+.slider:before{
+content:"";
+position:absolute;
+width:18px;height:18px;
+background:#00ff9d;
+border-radius:50%;
+top:3px;left:3px;
+transition:.3s;
+}
+input:checked + .slider:before{
+transform:translateX(24px);
+}
+
+/* CROSSHAIR */
+#crosshair{
+position:fixed;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+width:50px;
+height:50px;
+display:none;
+pointer-events:none;
+}
+#crosshair::before,#crosshair::after{
+content:"";
+position:absolute;
+background:#00ff9d;
+}
+#crosshair::before{width:2px;height:100%;left:50%;transform:translateX(-50%);}
+#crosshair::after{height:2px;width:100%;top:50%;transform:translateY(-50%);}
+
+canvas{
+width:100%;
+height:140px;
+border:1px solid #00ff9d;
+border-radius:10px;
+background:#000;
+}
+
+.hidden{display:none;}
+
+</style>
+</head>
+
+<body>
+
+<div class="box">
+
+<h1>DUC HUY</h1>
+
+<!-- LOGIN -->
+<div id="login">
+
+<input id="key" placeholder="NHẬP KEY">
+
+<button onclick="pasteKey()">📋 DÁN KEY</button>
+<button onclick="clearKey()">🧹 XOÁ KEY</button>
+
+<input id="device" readonly>
+
+<button onclick="login()">LOGIN</button>
+
+<p id="msg"></p>
+
+</div>
+
+<!-- MAIN -->
+<div id="main" class="hidden">
+
+<div class="section">
+<h3>⏳ THỜI GIAN KEY</h3>
+<p id="time"></p>
+<button onclick="logout()">ĐĂNG XUẤT</button>
+</div>
+
+<div class="section">
+<h3>CONTROL</h3>
+
+<label>NHẠY</label>
+<label class="switch"><input type="checkbox"><span class="slider"></span></label>
+
+<label>BÁM ĐẦU</label>
+<label class="switch"><input type="checkbox"><span class="slider"></span></label>
+
+<label>NHẸ TÂM</label>
+<label class="switch"><input type="checkbox"><span class="slider"></span></label>
+
+<label>KHOÁ ĐẦU</label>
+<label class="switch"><input type="checkbox"><span class="slider"></span></label>
+
+</div>
+
+<div class="section">
+<h3>🍎 IOS MODE</h3>
+<button onclick="ios()">BẬT IOS</button>
+<div id="iosBox"></div>
+</div>
+
+<div class="section">
+<h3>🎯 TÂM ẢO</h3>
+
+<label class="switch">
+<input type="checkbox" onchange="crossToggle(this)">
+<span class="slider"></span>
+</label>
+
+<input type="range" min="20" max="120" value="50" oninput="crossSize(this.value)">
+</div>
+
+<div class="section">
+<h3>📊 SYSTEM MONITOR</h3>
+<canvas id="chart" width="320" height="140"></canvas>
+<p id="sys"></p>
+</div>
+
+</div>
+
+</div>
+
+<div id="crosshair"></div>
+
+<script>
+
+let db=JSON.parse(localStorage.getItem("key_db")||"[]");
+
+/* DEVICE */
+function device(){
+return btoa(navigator.userAgent+screen.width+screen.height);
+}
+
+document.getElementById("device").value=device();
+
+/* PASTE */
+function pasteKey(){
+navigator.clipboard.readText().then(t=>{
+document.getElementById("key").value=t;
+});
+}
+
+/* CLEAR KEY */
+function clearKey(){
+document.getElementById("key").value="";
+msg("🧹 ĐÃ XOÁ KEY");
+}
+
+/* LOGIN (FIX RETRY) */
+function login(){
+let k=document.getElementById("key").value;
+let d=device();
+
+let f=db.find(x=>x.key===k);
+
+if(!f){
+msg("❌ SAI KEY - NHẬP LẠI");
+document.getElementById("key").value="";
+return;
+}
+
+if(f.locked) return msg("⛔ KEY LOCK");
+if(Date.now()>f.exp) return msg("⛔ HẾT HẠN");
+
+if(!f.device){
+f.device=d;
+localStorage.setItem("key_db",JSON.stringify(db));
+}
+
+if(f.device!==d) return msg("⛔ SAI THIẾT BỊ");
+
+document.getElementById("login").classList.add("hidden");
+document.getElementById("main").classList.remove("hidden");
+
+timer(f.exp);
+}
+
+/* TIMER */
+function timer(exp){
+setInterval(()=>{
+let l=exp-Date.now();
+let h=Math.floor(l/3600000);
+let m=Math.floor(l%3600000/60000);
+let s=Math.floor(l%60000/1000);
+document.getElementById("time").innerText=h+"H "+m+"M "+s+"S";
+},1000);
+}
+
+function logout(){location.reload();}
+function msg(t){document.getElementById("msg").innerText=t;}
+
+/* IOS */
+function ios(){
+let b=document.getElementById("iosBox");
+let t=["BOOT","LOAD","OPTIMIZE","READY"];
+let i=0;
+b.innerHTML="";
+let r=setInterval(()=>{
+b.innerHTML+=t[i]+"<br>";
+i++;
+if(i>=t.length)clearInterval(r);
+},600);
+}
+
+/* CROSS */
+function crossToggle(e){
+document.getElementById("crosshair").style.display=e.checked?"block":"none";
+}
+function crossSize(v){
+let c=document.getElementById("crosshair");
+c.style.width=v+"px";
+c.style.height=v+"px";
+}
+
+/* GRAPH */
+let c=document.getElementById("chart");
+let ctx=c.getContext("2d");
+let d=Array(20).fill(60);
+
+function draw(){
+ctx.clearRect(0,0,320,140);
+for(let i=0;i<d.length;i++){
+ctx.fillStyle="#00ff9d";
+ctx.fillRect(i*16,140-d[i],10,d[i]);
+}
+document.getElementById("sys").innerText=
+"FPS:"+d[d.length-1]+
+" | CPU:"+Math.floor(Math.random()*90)+
+"% | RAM:"+Math.floor(Math.random()*80)+"%";
+d.shift();
+d.push(Math.random()*100|0);
+}
+
+setInterval(draw,500);
+draw();
+
+</script>
+
+</body>
+</html>
